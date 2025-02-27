@@ -1,64 +1,79 @@
 import nltk
+import string
+import numpy as np
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize
-from nltk.probability import FreqDist
+from nltk import pos_tag, ne_chunk
+from sklearn.feature_extraction.text import TfidfVectorizer
 
+# Download necessary NLTK resources
 nltk.download('punkt')
 nltk.download('stopwords')
-nltk.download('averaged_perceptron_tagger')  # Gerekli olabilir
-nltk.download('wordnet')  # Gerekli olabilir
-nltk.download('omw-1.4')  # Gerekli olabilir
-nltk.download('punkt_tab')  # Hata mesajına göre eksik olan bu
+nltk.download('maxent_ne_chunker')
+nltk.download('words')
+nltk.download('averaged_perceptron_tagger')
 
-def summarize_text(text, num_sentences=1):
-    sentences = sent_tokenize(text)
+def get_named_entities(text):
+    """Extract named entities from the text to prioritize key sentences."""
     words = word_tokenize(text)
+    tagged = pos_tag(words)
+    chunked = ne_chunk(tagged)
+    named_entities = {word for subtree in chunked if hasattr(subtree, 'label') for word, _ in subtree.leaves()}
+    return named_entities
 
+def summarize_text(text, compression_ratio=0.3):
+    """Summarize text using TF-IDF weighting and Named Entity Recognition (NER) boosting."""
+    sentences = sent_tokenize(text)
+    if len(sentences) == 0:
+        return "No sentences found in input."
 
+    num_sentences = max(1, int(len(sentences) * compression_ratio))  # Ensure at least 1 sentence
+
+    # Stopwords & Punctuation Removal
     stop_words = set(stopwords.words('english'))
-    words = [word.lower() for word in words if word.isalnum() and word.lower() not in stop_words]
+    punctuation = set(string.punctuation)
 
+    # Named Entity Recognition (NER)
+    named_entities = get_named_entities(text)
 
-    word_freq = FreqDist(words)
+    # Compute TF-IDF scores for words
+    vectorizer = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = vectorizer.fit_transform(sentences)
+    tfidf_scores = np.array(tfidf_matrix.sum(axis=1)).flatten()  # Sum scores per sentence
 
+    # Score sentences based on TF-IDF and Named Entity presence
     sentence_scores = {}
     for i, sentence in enumerate(sentences):
-        for word, freq in word_freq.items():
-            if word in sentence.lower():
-                if i in sentence_scores:
-                    sentence_scores[i] += freq
-                else:
-                    sentence_scores[i] = freq
+        words = word_tokenize(sentence.lower())
+        sentence_scores[i] = tfidf_scores[i]  # Base score from TF-IDF
+        
+        # Boost score if sentence contains named entities
+        if any(word in named_entities for word in words):
+            sentence_scores[i] *= 1.5  # Increase weight
 
-
+    # Select top-ranked sentences
     sorted_sentences = sorted(sentence_scores.items(), key=lambda x: x[1], reverse=True)
-    top_sentences_indices = [sentence[0] for sentence in sorted_sentences[:num_sentences]]
+    top_sentences_indices = sorted([index for index, _ in sorted_sentences[:num_sentences]])
 
-
-    top_sentences_indices.sort()
-
-    summary_sentences = [sentences[index] for index in top_sentences_indices]
-
-
-    summary = ' '.join(summary_sentences)
+    # Construct summary
+    summary = ' '.join(sentences[i] for i in top_sentences_indices)
     return summary
 
+# Get user input for text
+input_text = input("Enter the text to summarize:\n")
 
-input_text = """
-Python programming language is known for its simplicity and readability. It is widely used in web development, data science, artificial intelligence, and more. Python has a large and active community of developers, which makes it easy to find support and resources.
+# Get user input for compression ratio (optional)
+try:
+    user_ratio = float(input("Enter the compression ratio (0-1, default 0.3): ") or 0.3)
+    if not (0 < user_ratio <= 1):
+        raise ValueError
+except ValueError:
+    print("Invalid ratio! Using default (0.3).")
+    user_ratio = 0.3
 
-One of the key features of Python is its versatility. It supports both procedural and object-oriented programming paradigms. Python's syntax allows developers to express concepts in fewer lines of code compared to languages like C++ or Java.
+# Generate summary
+summary = summarize_text(input_text, compression_ratio=user_ratio)
 
-The Python community has developed a vast number of libraries and frameworks that simplify various tasks. For example, Django and Flask are popular frameworks for web development, while NumPy and Pandas are widely used for data manipulation and analysis.
-
-In recent years, Python has gained significant traction in the field of artificial intelligence and machine learning. Libraries such as TensorFlow and PyTorch have become go-to tools for building and training machine learning models.
-
-Overall, Python's ease of use, extensive libraries, and community support make it an excellent choice for both beginners and experienced developers.
-
-"""
-
-summary = summarize_text(input_text)
-print("Input Text:")
-print(input_text)
+# Print the generated summary
 print("\nGenerated Summary:")
 print(summary)
