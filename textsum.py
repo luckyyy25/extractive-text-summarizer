@@ -12,8 +12,8 @@ nltk.download('punkt', quiet=True)
 nlp = spacy.load("en_core_web_sm")
 
 # Load T5 model for abstractive summarization
-t5_model = T5ForConditionalGeneration.from_pretrained("t5-small")
-t5_tokenizer = T5Tokenizer.from_pretrained("t5-small")
+t5_model = T5ForConditionalGeneration.from_pretrained("t5-base")  # Upgraded to a larger model
+t5_tokenizer = T5Tokenizer.from_pretrained("t5-base")
 
 def get_named_entities(text):
     """Extract named entities using spaCy for better accuracy."""
@@ -32,18 +32,20 @@ def summarize_text(text, compression_ratio=0.3):
     named_entities = get_named_entities(text)
     
     # Modify the input prompt for better abstraction
-    t5_input_text = "Provide a concise summary: " + text
+    t5_input_text = "Generate a concise and fluent summary: " + text
     input_ids = t5_tokenizer.encode(t5_input_text, return_tensors="pt", max_length=512, truncation=True)
     
     # Generate summary with optimized parameters
     summary_ids = t5_model.generate(
         input_ids,
-        max_length=150,
-        num_beams=5,  # Increase beams for better coherence
+        max_length=100,  # Reduce max length for concise output
+        min_length=20,  # Ensure meaningful length
+        num_beams=7,  # More beams for better quality
         do_sample=True,  # Enable sampling for diversity
-        top_k=80,  # Allow more varied words
-        temperature=0.9,  # Increase randomness for more abstraction
-        repetition_penalty=1.2,  # Reduce repetition
+        top_k=100,  # Allow more varied words
+        temperature=1.0,  # Increase randomness for better abstraction
+        repetition_penalty=1.3,  # Reduce redundancy
+        length_penalty=1.2,  # Encourage balanced length
         early_stopping=True
     )
     summary = t5_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
