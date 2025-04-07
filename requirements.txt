@@ -1,0 +1,7 @@
+nltk>=3.8.1
+spacy>=3.7.2
+transformers>=4.38.2
+torch>=2.1.2
+scikit-learn>=1.4.1
+sentence-transformers>=2.6.1
+numpy>=1.26.4
